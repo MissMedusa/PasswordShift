@@ -25,13 +25,13 @@ var decryptData = function (str) {
     var index = 0;
     var output = "";
     
-    for (var i = 0; i < str.length; i++) {
+    for (var i = 0; i < str.length - 1; i++) {
       var currentChar = str[i];
       if(index > 4){
         index = 0;
       }
       if(currentChar == 10){
-        output += String.fromCharCode(currentChar);
+        output += ',';
         index = 0;            
         } else {
           currentChar -= key[index];
@@ -39,7 +39,9 @@ var decryptData = function (str) {
           index++;
         }
       }
-    return output;
+    var credentials = [];
+    credentials = output.split(',').map((e) => {return e.split('*').map(String)});
+    return credentials;
 };
 
 router.get('/', (req, res) => {
@@ -50,27 +52,27 @@ router.get('/', (req, res) => {
     }
 });
 
-router.post('/login', async (req, res) => {     
-      const userEmail = req.body.data.email;
-      const userPassword = req.body.data.password;
-      const userCredentials = userEmail + "*" + userPassword;
+router.post('/login', async (req, res) => {
       const encryptedData = fs.readFileSync('./password.txt');
       const decryptedData = decryptData(encryptedData);
-      if(decryptedData.includes(userCredentials)){ //ez nem jó mert ha rövidebb része van a jelszóból akkor is jó
-        console.log('\n' + decryptedData + '\n' + userCredentials);
-        const userInDB = await db.adatok.findOne({ where: {Username: userEmail} })
-        .then((data) => {
-          if (data != null) {          
-            return res.json(data.Titkos);
-          }
-          else {
-            return res.json({ message: 'Cannot retrieve details'});
-          }          
+      const rowIndex = decryptedData.findIndex(el => el.includes(req.body.data.email));
+      if(decryptedData[rowIndex] != undefined &&  decryptedData[rowIndex][0] == req.body.data.email){
+        if(decryptedData[rowIndex][1] == req.body.data.password){
+          await db.adatok.findOne({ where: {Username: req.body.data.email} })
+          .then((data) => {
+            if (data != null) { 
+              return res.json(data.Titkos);
+            }
+            else {
+              return res.status(500).json({ message: 'Cannot retrieve details'});
+            }          
         });
+        } else {
+          return res.json({ message: 'Wrong password!'});
+        }
       } else {
-        console.log('\nToo bad!!! Calling the police..\n');
-        return res.status(401).json({ error: 'Calling the police'});
-      }    
+        return res.json({ message: 'Wrong email!'});
+      }  
 });
 
 module.exports = router;
